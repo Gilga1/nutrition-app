@@ -1,24 +1,26 @@
 from __future__ import annotations
 
 import io
+import json
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image, UnidentifiedImageError
 
 from .config import get_settings
-from .schemas import HealthResponse, MealEstimate
+from .notion_client import NotionMealLogger
+from .schemas import HealthResponse, MealEstimate, MealType, UserProfile
 from .vision import VisionEstimator
 
-# Load repo-root .env then backend/.env
 _ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(_ROOT / ".env")
 load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=True)
 
 ALLOWED_TYPES = {"image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"}
+MEAL_TYPES: set[str] = {"Breakfast", "Lunch", "Dinner", "Snack", "Pre-workout"}
 
 
 @asynccontextmanager
@@ -26,14 +28,17 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     app.state.settings = settings
     app.state.estimator = None
+    app.state.notion = None
     if settings.vision_configured:
         app.state.estimator = VisionEstimator(settings)
+    if settings.notion_configured:
+        app.state.notion = NotionMealLogger(settings)
     yield
 
 
 app = FastAPI(
     title="North Indian Meal Calorie Estimator",
-    version="0.1.0",
+    version="0.2.0",
     lifespan=lifespan,
 )
 
@@ -54,19 +59,39 @@ def health() -> HealthResponse:
         status="ok",
         model=s.vision_model,
         vision_configured=s.vision_configured,
+        notion_configured=s.notion_configured,
     )
 
 
 @app.post("/api/estimate", response_model=MealEstimate)
-async def estimate_meal(file: UploadFile = File(...)) -> MealEstimate:
+async def estimate_meal(
+    file: UploadFile = File(...),
+    meal_type: str = Form(default="Lunch"),
+    profile_json: str = Form(default=""),
+    save_to_notion: bool = Form(default=True),
+) -> MealEstimate:
     settings = app.state.settings
     estimator: VisionEstimator | None = app.state.estimator
+    notion: NotionMealLogger | None = app.state.notion
 
     if estimator is None:
         raise HTTPException(
             status_code=503,
             detail="Vision API not configured. Set NVIDIA_API_KEY in .env and restart.",
         )
+
+    if meal_type not in MEAL_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid meal_type. Use one of: {', '.join(sorted(MEAL_TYPES))}",
+        )
+
+    profile: UserProfile | None = None
+    if profile_json.strip():
+        try:
+            profile = UserProfile.model_validate(json.loads(profile_json))
+        except (json.JSONDecodeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail=f"Invalid profile_json: {exc}") from exc
 
     content_type = (file.content_type or "").lower()
     if content_type not in ALLOWED_TYPES:
@@ -94,9 +119,25 @@ async def estimate_meal(file: UploadFile = File(...)) -> MealEstimate:
     mime = content_type if content_type != "image/jpg" else "image/jpeg"
 
     try:
-        return estimator.estimate(raw, mime)
-    except Exception as exc:  # noqa: BLE001 — surface model/API failures cleanly
+        result = estimator.estimate(
+            raw,
+            mime,
+            profile=profile,
+            meal_type=meal_type,  # type: ignore[arg-type]
+        )
+    except Exception as exc:  # noqa: BLE001
         raise HTTPException(
             status_code=502,
             detail=f"Vision estimation failed: {exc}",
         ) from exc
+
+    if save_to_notion and notion is not None:
+        try:
+            result.notion_page_url = notion.log_meal(result, meal_type=meal_type)  # type: ignore[arg-type]
+        except Exception as exc:  # noqa: BLE001 — don't fail estimate if Notion fails
+            result.assumptions = [
+                *result.assumptions,
+                f"Notion save failed: {exc}",
+            ]
+
+    return result

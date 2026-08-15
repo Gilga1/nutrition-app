@@ -2,13 +2,51 @@
 
 Private, photo-based calorie estimator for **North Indian vegetarian** meals.
 
-Snap a thali (dal, sabzi, roti, rice, paneer) → itemized portions in **katoris/count** → calories + protein → one **Smart Reduction Tip**.
+Snap a thali (dal, sabzi, roti, rice, paneer) → itemized portions in **katoris/count** → macros + micros → **Smart Reduction Tip** → auto-log to **Notion Meals**.
 
-Stack: **React (Vite + Tailwind)** frontend · **FastAPI** backend · **NVIDIA Nemotron 3 Nano Omni** vision (via [NVIDIA NIM](https://build.nvidia.com)).
+Stack: **React (Vite + Tailwind)** frontend · **FastAPI** backend · **NVIDIA Nemotron 3 Nano Omni** vision · **Notion** meal log.
 
 ---
 
-## Prerequisites
+## Deploy on Render (recommended)
+
+1. Push this repo to GitHub
+2. Go to [render.com](https://render.com) → **New** → **Blueprint** → connect repo
+3. Render reads `render.yaml` and creates two services:
+   - `thaliscan-api` — Python backend
+   - `thaliscan-web` — static frontend
+4. When prompted, set secret env vars:
+   - `NVIDIA_API_KEY`
+   - `NOTION_API_KEY`
+   - `CORS_ORIGINS` → your frontend URL, e.g. `https://thaliscan-web.onrender.com`
+5. After deploy, open the **thaliscan-web** URL on your phone
+
+**Notion setup:** In Notion → **Meals** database → **⋯** → **Connections** → add your integration (same one as `NOTION_API_KEY`).
+
+**Free tier note:** Render free web services sleep after ~15 min idle. First request may take 30–60s to wake.
+
+---
+
+## Notion Meals database
+
+Found in your workspace: **Meals** (under 🏠 Habit Tracker — Home)
+
+| Property | ThaliScan maps |
+|----------|----------------|
+| Name | `{Meal Type} - {dish name}` |
+| Date | Today |
+| Meal Type | Breakfast / Lunch / Dinner / Snack / Pre-workout |
+| Protein, Carbs, Fat (g) | Totals |
+| Fiber, Iron, Calcium, Sodium, Potassium, Sugar, Vit C/D | Micros |
+| Confidence | High / Medium / Low |
+| Notes | Item breakdown + smart tip + zinc/magnesium |
+| Calories | Auto formula from macros |
+
+Database ID (default): `45a56aaa1c6a441ab6f82b01ac9ca2b7`
+
+---
+
+## Prerequisites (local dev)
 
 - Python 3.11+
 - Node.js 20+
@@ -33,6 +71,8 @@ copy .env.example .env
 
 ```env
 NVIDIA_API_KEY=nvapi-...
+NOTION_API_KEY=secret_...
+NOTION_MEALS_DATABASE_ID=45a56aaa1c6a441ab6f82b01ac9ca2b7
 VISION_MODEL=nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
 VISION_BASE_URL=https://integrate.api.nvidia.com/v1
 HOST=0.0.0.0

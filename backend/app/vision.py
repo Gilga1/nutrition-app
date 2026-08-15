@@ -8,8 +8,9 @@ from typing import Any
 from openai import OpenAI
 
 from .config import Settings
-from .prompts import NORTH_INDIAN_VEG_PROMPT
-from .schemas import MealEstimate
+from .nutrition import estimate_tdee
+from .prompts import build_system_prompt
+from .schemas import MealEstimate, MealType, UserProfile
 
 
 def _extract_json(text: str) -> dict[str, Any]:
@@ -52,28 +53,31 @@ class VisionEstimator:
             base_url=settings.vision_base_url,
         )
 
-    def estimate(self, image_bytes: bytes, mime_type: str) -> MealEstimate:
+    def estimate(
+        self,
+        image_bytes: bytes,
+        mime_type: str,
+        profile: UserProfile | None = None,
+        meal_type: MealType | None = None,
+    ) -> MealEstimate:
         b64 = base64.b64encode(image_bytes).decode("ascii")
         data_url = f"data:{mime_type};base64,{b64}"
+        system_prompt = build_system_prompt(profile, meal_type)
 
         request_kwargs: dict[str, Any] = {
             "model": self.settings.vision_model,
             "temperature": 0.2,
             "max_tokens": 4096,
             "messages": [
-                {
-                    "role": "system",
-                    "content": NORTH_INDIAN_VEG_PROMPT,
-                },
+                {"role": "system", "content": system_prompt},
                 {
                     "role": "user",
                     "content": [
                         {
                             "type": "text",
                             "text": (
-                                "Estimate this North Indian vegetarian meal. "
-                                "Use katori/count portions and include a smart reduction tip. "
-                                "Respond with JSON only."
+                                "Estimate this North Indian vegetarian meal with macros and "
+                                "micronutrients. Use katori/count portions. JSON only."
                             ),
                         },
                         {
@@ -85,7 +89,6 @@ class VisionEstimator:
             ],
         }
 
-        # Nemotron on NVIDIA NIM: disable chain-of-thought for cleaner JSON
         if self.settings.is_nemotron:
             request_kwargs["extra_body"] = {
                 "top_k": 1,
@@ -104,4 +107,7 @@ class VisionEstimator:
             content = message.reasoning_content or "{}"
 
         payload = _reconcile_totals(_extract_json(content))
-        return MealEstimate.model_validate(payload)
+        estimate = MealEstimate.model_validate(payload)
+        if profile:
+            estimate.daily_targets = estimate_tdee(profile)
+        return estimate

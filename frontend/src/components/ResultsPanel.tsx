@@ -12,11 +12,45 @@ function MacroPill({ label, value, unit }: { label: string; value: number; unit:
   )
 }
 
+function MicroChip({ label, value, unit }: { label: string; value: number; unit: string }) {
+  if (!value) return null
+  return (
+    <span className="rounded-full bg-white/80 px-2.5 py-1 text-xs text-ink-soft">
+      {label}: {value < 10 ? value.toFixed(1) : Math.round(value)}
+      {unit}
+    </span>
+  )
+}
+
 export function ResultsPanel({ estimate }: { estimate: MealEstimate }) {
   const tip = estimate.smart_reduction_tip
+  const micros = estimate.micros
+  const targets = estimate.daily_targets
 
   return (
     <div className="animate-fade-up space-y-4">
+      {targets?.calories && (
+        <section className="rounded-2xl border border-ink/8 bg-card/90 px-4 py-3 text-sm text-ink-soft">
+          <span className="font-medium text-ink">Daily targets:</span>{' '}
+          ~{Math.round(targets.calories)} kcal
+          {targets.protein_g ? ` · ${targets.protein_g}g protein` : ''}
+          {targets.note && (
+            <p className="mt-1 text-xs text-ink-soft/70">{targets.note}</p>
+          )}
+        </section>
+      )}
+
+      {estimate.notion_page_url && (
+        <a
+          href={estimate.notion_page_url}
+          target="_blank"
+          rel="noreferrer"
+          className="block rounded-2xl border border-leaf/30 bg-leaf/10 px-4 py-3 text-sm font-medium text-leaf"
+        >
+          Saved to Notion Meals →
+        </a>
+      )}
+
       <section className="rounded-3xl border border-ink/8 bg-card/90 p-5 shadow-[0_16px_40px_-24px_rgba(26,46,36,0.4)] sm:p-6">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
           <div>
@@ -35,6 +69,16 @@ export function ResultsPanel({ estimate }: { estimate: MealEstimate }) {
           <MacroPill label="Fat" value={estimate.totals.fat_g} unit="g" />
         </div>
 
+        <div className="mb-5 flex flex-wrap gap-2">
+          <MicroChip label="Fibre" value={micros.fibre_g} unit="g" />
+          <MicroChip label="Iron" value={micros.iron_mg} unit="mg" />
+          <MicroChip label="Calcium" value={micros.calcium_mg} unit="mg" />
+          <MicroChip label="Zinc" value={micros.zinc_mg} unit="mg" />
+          <MicroChip label="Mg" value={micros.magnesium_mg} unit="mg" />
+          <MicroChip label="Sodium" value={micros.sodium_mg} unit="mg" />
+          <MicroChip label="Potassium" value={micros.potassium_mg} unit="mg" />
+        </div>
+
         <div className="overflow-hidden rounded-2xl border border-ink/8">
           <div className="hidden grid-cols-[1.4fr_1fr_0.7fr_0.7fr] gap-2 bg-ink px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-surface/80 sm:grid">
             <span>Item</span>
@@ -44,7 +88,10 @@ export function ResultsPanel({ estimate }: { estimate: MealEstimate }) {
           </div>
           <ul className="divide-y divide-ink/8 bg-white">
             {estimate.items.map((item) => (
-              <li key={`${item.item}-${item.portion}`} className="px-3 py-3 sm:grid sm:grid-cols-[1.4fr_1fr_0.7fr_0.7fr] sm:items-center sm:gap-2">
+              <li
+                key={`${item.item}-${item.portion}`}
+                className="px-3 py-3 sm:grid sm:grid-cols-[1.4fr_1fr_0.7fr_0.7fr] sm:items-center sm:gap-2"
+              >
                 <div>
                   <p className="font-medium text-ink">{item.item}</p>
                   {item.notes && (

@@ -1,9 +1,27 @@
 import { useEffect, useId, useRef, useState, type ChangeEvent } from 'react'
-import { Camera, ImagePlus, Loader2, RefreshCw, Sparkles, UtensilsCrossed } from 'lucide-react'
-import { checkHealth, estimateMeal, type MealEstimate } from './api'
+import {
+  Camera,
+  ImagePlus,
+  Loader2,
+  RefreshCw,
+  Settings2,
+  Sparkles,
+  UtensilsCrossed,
+} from 'lucide-react'
+import {
+  checkHealth,
+  estimateMeal,
+  type MealEstimate,
+  type MealType,
+  type UserProfile,
+} from './api'
 import { ResultsPanel } from './components/ResultsPanel'
+import { SettingsPanel } from './components/SettingsPanel'
+import { loadProfile, saveProfile } from './profile'
 
 type Status = 'idle' | 'analyzing' | 'done' | 'error'
+
+const MEAL_TYPES: MealType[] = ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Pre-workout']
 
 export default function App() {
   const inputId = useId()
@@ -14,16 +32,24 @@ export default function App() {
   const [error, setError] = useState<string | null>(null)
   const [backendOk, setBackendOk] = useState<boolean | null>(null)
   const [visionReady, setVisionReady] = useState(false)
+  const [notionReady, setNotionReady] = useState(false)
+  const [mealType, setMealType] = useState<MealType>('Lunch')
+  const [saveToNotion, setSaveToNotion] = useState(true)
+  const [profile, setProfile] = useState<UserProfile>(() => loadProfile())
+  const [showSettings, setShowSettings] = useState(false)
 
   useEffect(() => {
     checkHealth()
       .then((h) => {
         setBackendOk(true)
         setVisionReady(h.vision_configured)
+        setNotionReady(h.notion_configured)
+        setSaveToNotion(h.notion_configured)
       })
       .catch(() => {
         setBackendOk(false)
         setVisionReady(false)
+        setNotionReady(false)
       })
   }, [])
 
@@ -49,7 +75,11 @@ export default function App() {
     setStatus('analyzing')
 
     try {
-      const result = await estimateMeal(file)
+      const result = await estimateMeal(file, {
+        mealType,
+        profile,
+        saveToNotion: saveToNotion && notionReady,
+      })
       setEstimate(result)
       setStatus('done')
     } catch (err) {
@@ -71,14 +101,29 @@ export default function App() {
     setStatus('idle')
   }
 
+  function handleSaveProfile(next: UserProfile) {
+    setProfile(next)
+    saveProfile(next)
+  }
+
   return (
     <div className="mx-auto flex min-h-dvh max-w-lg flex-col px-4 pb-10 pt-6 sm:max-w-2xl sm:px-6">
       <header className="animate-fade-up mb-8">
-        <p className="mb-2 font-display text-3xl font-bold tracking-tight text-ink sm:text-4xl">
-          ThaliScan
-        </p>
+        <div className="mb-2 flex items-start justify-between gap-3">
+          <p className="font-display text-3xl font-bold tracking-tight text-ink sm:text-4xl">
+            ThaliScan
+          </p>
+          <button
+            type="button"
+            onClick={() => setShowSettings(true)}
+            className="rounded-2xl border border-ink/10 bg-card/80 p-2.5 text-ink-soft hover:bg-white"
+            aria-label="Profile settings"
+          >
+            <Settings2 className="size-5" />
+          </button>
+        </div>
         <p className="max-w-md text-sm leading-relaxed text-ink-soft/80 sm:text-base">
-          Snap your North Indian veg thali — get calories, protein, and one smart cut.
+          Snap your North Indian veg thali — macros, micros, and one smart cut.
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-ink-soft/70">
           <span
@@ -99,7 +144,9 @@ export default function App() {
               ? 'Checking API…'
               : backendOk
                 ? visionReady
-                  ? 'API ready'
+                  ? notionReady
+                    ? 'API + Notion ready'
+                    : 'API ready'
                   : 'API up · set NVIDIA_API_KEY'
                 : 'API offline'}
           </span>
@@ -108,15 +155,35 @@ export default function App() {
 
       <main className="flex flex-1 flex-col gap-5">
         <section className="animate-fade-up relative overflow-hidden rounded-3xl border border-ink/8 bg-card/80 shadow-[0_20px_50px_-28px_rgba(26,46,36,0.45)] backdrop-blur-sm">
-          <div
-            className="pointer-events-none absolute inset-0 opacity-40"
-            style={{
-              backgroundImage:
-                'radial-gradient(circle at 20% 20%, rgba(212,160,23,0.12), transparent 40%), radial-gradient(circle at 80% 0%, rgba(61,107,79,0.1), transparent 35%)',
-            }}
-          />
-
           <div className="relative p-5 sm:p-6">
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+              <label className="flex-1 text-sm">
+                <span className="mb-1 block font-medium text-ink-soft">Meal type</span>
+                <select
+                  value={mealType}
+                  onChange={(e) => setMealType(e.target.value as MealType)}
+                  className="w-full rounded-xl border border-ink/15 bg-white px-3 py-2.5"
+                >
+                  {MEAL_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {notionReady && (
+                <label className="flex items-center gap-2 text-sm text-ink-soft">
+                  <input
+                    type="checkbox"
+                    checked={saveToNotion}
+                    onChange={(e) => setSaveToNotion(e.target.checked)}
+                    className="size-4 rounded border-ink/20"
+                  />
+                  Save to Notion
+                </label>
+              )}
+            </div>
+
             {preview ? (
               <div className="overflow-hidden rounded-2xl bg-ink/5">
                 <img
@@ -132,7 +199,7 @@ export default function App() {
                 </div>
                 <p className="font-display text-xl text-ink">Your plate, estimated</p>
                 <p className="max-w-xs text-sm text-ink-soft/75">
-                  Dal, sabzi, roti, rice, paneer — portions in katoris, fat from ghee/oil counted in.
+                  Dal, sabzi, roti, rice, paneer — with fibre, iron, calcium, and more.
                 </p>
               </div>
             )}
@@ -179,7 +246,7 @@ export default function App() {
 
             <p className="mt-3 flex items-center gap-1.5 text-xs text-ink-soft/60">
               <ImagePlus className="size-3.5" />
-              Private local app — photos stay on your machine / Tailscale network.
+              Profile stored on device · meals logged to your Notion Meals DB.
             </p>
           </div>
         </section>
@@ -196,7 +263,7 @@ export default function App() {
         {status === 'analyzing' && (
           <div className="animate-fade-up flex items-center gap-3 rounded-2xl border border-ink/8 bg-card/90 px-4 py-4 text-sm text-ink-soft">
             <Sparkles className="size-5 animate-pulse-soft text-turmeric" />
-            Identifying North Indian dishes and estimating portions…
+            Estimating macros, micros, and your smart tip…
           </div>
         )}
 
@@ -204,8 +271,16 @@ export default function App() {
       </main>
 
       <footer className="mt-10 text-center text-xs text-ink-soft/50">
-        Prototype · estimates only · not medical advice
+        Estimates only · not medical advice
       </footer>
+
+      {showSettings && (
+        <SettingsPanel
+          profile={profile}
+          onSave={handleSaveProfile}
+          onClose={() => setShowSettings(false)}
+        />
+      )}
     </div>
   )
 }

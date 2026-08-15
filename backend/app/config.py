@@ -34,9 +34,19 @@ class Settings(BaseSettings):
     port: int = 8000
     max_upload_mb: int = 10
 
+    notion_api_key: str = Field(default="", validation_alias="NOTION_API_KEY")
+    notion_meals_database_id: str = Field(
+        default="45a56aaa1c6a441ab6f82b01ac9ca2b7",
+        validation_alias="NOTION_MEALS_DATABASE_ID",
+    )
+
     @property
     def vision_configured(self) -> bool:
         return bool(self.vision_api_key.strip())
+
+    @property
+    def notion_configured(self) -> bool:
+        return bool(self.notion_api_key.strip() and self.notion_meals_database_id.strip())
 
     @property
     def is_nemotron(self) -> bool:
