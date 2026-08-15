@@ -42,6 +42,8 @@ FOOD_DB: dict[str, Per100g] = {
     "curd": Per100g(60, 3.5, 4.5, 3.0),
     "dahi": Per100g(60, 3.5, 4.5, 3.0),
     "raita": Per100g(75, 3.0, 6.0, 4.5),
+    "boondi raita": Per100g(120, 4.5, 12.0, 6.5),
+    "boondi": Per100g(450, 12.0, 55.0, 22.0),
     # Sabzi (cooked, with oil)
     "aloo gobhi": Per100g(95, 2.5, 12.0, 4.5),
     "bhindi": Per100g(85, 2.2, 9.0, 4.0),

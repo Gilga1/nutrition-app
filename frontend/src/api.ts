@@ -96,6 +96,7 @@ export async function estimateMeal(
   options: {
     mealType: MealType
     profile: UserProfile | null
+    mealCorrection?: string
   },
 ): Promise<MealEstimate> {
   const form = new FormData()
@@ -105,12 +106,37 @@ export async function estimateMeal(
   if (options.profile) {
     form.append('profile_json', JSON.stringify(options.profile))
   }
+  if (options.mealCorrection?.trim()) {
+    form.append('meal_correction', options.mealCorrection.trim())
+  }
   const res = await fetch(`${API_BASE}/api/estimate`, {
     method: 'POST',
     body: form,
   })
   if (!res.ok) {
     let detail = 'Estimation failed'
+    try {
+      const body = await res.json()
+      detail = body.detail ?? detail
+    } catch {
+      /* ignore */
+    }
+    throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail))
+  }
+  return res.json()
+}
+
+export async function decomposeMeal(
+  mealDescription: string,
+  mealType: MealType,
+): Promise<{ meal_summary: string; items: FoodItem[]; totals: MacroTotals }> {
+  const res = await fetch(`${API_BASE}/api/meal/decompose`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ meal_description: mealDescription, meal_type: mealType }),
+  })
+  if (!res.ok) {
+    let detail = 'Meal analysis failed'
     try {
       const body = await res.json()
       detail = body.detail ?? detail

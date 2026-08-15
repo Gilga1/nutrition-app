@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import {
   checkHealth,
+  decomposeMeal,
   estimateMeal,
   type MealEstimate,
   type MealType,
@@ -34,6 +35,8 @@ export default function App() {
   const [visionReady, setVisionReady] = useState(false)
   const [notionReady, setNotionReady] = useState(false)
   const [mealType, setMealType] = useState<MealType>('Lunch')
+  const [lastFile, setLastFile] = useState<File | null>(null)
+  const [reanalyzing, setReanalyzing] = useState(false)
   const [profile, setProfile] = useState<UserProfile>(() => loadProfile())
   const [showSettings, setShowSettings] = useState(false)
 
@@ -71,6 +74,7 @@ export default function App() {
     setEstimate(null)
     setError(null)
     setStatus('analyzing')
+    setLastFile(file)
 
     try {
       const result = await estimateMeal(file, {
@@ -94,8 +98,50 @@ export default function App() {
     if (preview) URL.revokeObjectURL(preview)
     setPreview(null)
     setEstimate(null)
+    setLastFile(null)
     setError(null)
     setStatus('idle')
+  }
+
+  async function handleReanalyze(mealDescription: string) {
+    const desc = mealDescription.trim()
+    if (!desc) return
+
+    setReanalyzing(true)
+    setError(null)
+    try {
+      if (lastFile) {
+        const result = await estimateMeal(lastFile, {
+          mealType,
+          profile,
+          mealCorrection: desc,
+        })
+        setEstimate(result)
+      } else {
+        const partial = await decomposeMeal(desc, mealType)
+        setEstimate((prev) =>
+          prev
+            ? {
+                ...prev,
+                meal_summary: partial.meal_summary,
+                items: partial.items,
+                totals: partial.totals,
+                notion_page_url: null,
+                assumptions: [
+                  ...prev.assumptions.filter((a) => !a.startsWith('Re-analyzed')),
+                  `Re-analyzed from description: ${desc}`,
+                ],
+              }
+            : null,
+        )
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Re-analysis failed'
+      setError(message)
+      throw err
+    } finally {
+      setReanalyzing(false)
+    }
   }
 
   function handleSaveProfile(next: UserProfile) {
@@ -104,10 +150,10 @@ export default function App() {
   }
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-lg flex-col px-4 pb-10 pt-6 sm:max-w-2xl sm:px-6">
-      <header className="animate-fade-up mb-8">
-        <div className="mb-2 flex items-start justify-between gap-3">
-          <p className="font-display text-3xl font-bold tracking-tight text-ink sm:text-4xl">
+    <div className="mx-auto flex min-h-dvh max-w-lg flex-col px-3 pb-24 pt-4 sm:max-w-2xl sm:px-6 sm:pb-10 sm:pt-6">
+      <header className="animate-fade-up mb-5 sm:mb-8">
+        <div className="mb-1 flex items-start justify-between gap-3">
+          <p className="font-display text-2xl font-bold tracking-tight text-ink sm:text-4xl">
             ThaliScan
           </p>
           <button
@@ -119,10 +165,10 @@ export default function App() {
             <Settings2 className="size-5" />
           </button>
         </div>
-        <p className="max-w-md text-sm leading-relaxed text-ink-soft/80 sm:text-base">
+        <p className="max-w-md text-xs leading-relaxed text-ink-soft/80 sm:text-base">
           Snap your North Indian veg thali — macros, micros, and one smart cut.
         </p>
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-ink-soft/70">
+        <div className="mt-2 hidden flex-wrap items-center gap-2 text-xs text-ink-soft/70 sm:flex">
           <span
             className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 ${
               backendOk === false
@@ -151,8 +197,8 @@ export default function App() {
       </header>
 
       <main className="flex flex-1 flex-col gap-5">
-        <section className="animate-fade-up relative overflow-hidden rounded-3xl border border-ink/8 bg-card/80 shadow-[0_20px_50px_-28px_rgba(26,46,36,0.45)] backdrop-blur-sm">
-          <div className="relative p-5 sm:p-6">
+        <section className={`animate-fade-up relative overflow-hidden rounded-3xl border border-ink/8 bg-card/80 shadow-[0_20px_50px_-28px_rgba(26,46,36,0.45)] backdrop-blur-sm ${estimate ? 'sm:block' : ''}`}>
+          <div className={`relative p-4 sm:p-6 ${estimate ? 'hidden sm:block' : ''}`}>
             <div className="mb-4">
               <label className="block text-sm">
                 <span className="mb-1 block font-medium text-ink-soft">Meal type</span>
@@ -246,6 +292,18 @@ export default function App() {
           </div>
         )}
 
+        {estimate && (
+          <div className="flex justify-center sm:hidden">
+            <button
+              type="button"
+              onClick={reset}
+              className="text-xs font-medium text-leaf underline-offset-2 hover:underline"
+            >
+              ← Scan a different meal
+            </button>
+          </div>
+        )}
+
         {status === 'analyzing' && (
           <div className="animate-fade-up flex items-center gap-3 rounded-2xl border border-ink/8 bg-card/90 px-4 py-4 text-sm text-ink-soft">
             <Sparkles className="size-5 animate-pulse-soft text-turmeric" />
@@ -254,7 +312,14 @@ export default function App() {
         )}
 
         {estimate && (
-          <ResultsPanel estimate={estimate} mealType={mealType} notionReady={notionReady} />
+          <ResultsPanel
+            estimate={estimate}
+            mealType={mealType}
+            notionReady={notionReady}
+            sourceFile={lastFile}
+            onReanalyze={handleReanalyze}
+            reanalyzing={reanalyzing}
+          />
         )}
       </main>
 

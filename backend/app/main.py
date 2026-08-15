@@ -17,6 +17,8 @@ from .schemas import (
     FoodLookupRequest,
     FoodLookupResponse,
     HealthResponse,
+    MealDecomposeRequest,
+    MealDecomposeResponse,
     MealEstimate,
     MealType,
     NotionLogRequest,
@@ -79,6 +81,7 @@ async def estimate_meal(
     meal_type: str = Form(default="Lunch"),
     profile_json: str = Form(default=""),
     save_to_notion: bool = Form(default=True),
+    meal_correction: str = Form(default=""),
 ) -> MealEstimate:
     settings = app.state.settings
     estimator: VisionEstimator | None = app.state.estimator
@@ -134,6 +137,7 @@ async def estimate_meal(
             mime,
             profile=profile,
             meal_type=meal_type,  # type: ignore[arg-type]
+            meal_correction=meal_correction.strip() or None,
         )
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(
@@ -175,3 +179,12 @@ def lookup_food(body: FoodLookupRequest) -> FoodLookupResponse:
         return service.lookup(body)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=f"Food lookup failed: {exc}") from exc
+
+
+@app.post("/api/meal/decompose", response_model=MealDecomposeResponse)
+def decompose_meal(body: MealDecomposeRequest) -> MealDecomposeResponse:
+    service: FoodLookupService = app.state.food_lookup
+    try:
+        return service.decompose_meal(body)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"Meal decomposition failed: {exc}") from exc

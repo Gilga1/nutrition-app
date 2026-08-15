@@ -56,6 +56,17 @@ class MacroTotals(BaseModel):
     fat_g: float = Field(0, ge=0)
 
 
+class MealDecomposeRequest(BaseModel):
+    meal_description: str = Field(..., min_length=2)
+    meal_type: MealType | None = None
+
+
+class MealDecomposeResponse(BaseModel):
+    meal_summary: str
+    items: list[FoodItem]
+    totals: MacroTotals
+
+
 class MicroTotals(BaseModel):
     fibre_g: float = Field(0, ge=0)
     calcium_mg: float = Field(0, ge=0)

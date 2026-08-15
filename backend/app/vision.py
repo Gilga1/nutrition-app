@@ -68,10 +68,21 @@ class VisionEstimator:
         mime_type: str,
         profile: UserProfile | None = None,
         meal_type: MealType | None = None,
+        meal_correction: str | None = None,
     ) -> MealEstimate:
         b64 = base64.b64encode(image_bytes).decode("ascii")
         data_url = f"data:{mime_type};base64,{b64}"
         system_prompt = build_system_prompt(profile, meal_type)
+
+        user_text = (
+            "Estimate this North Indian vegetarian meal with macros and "
+            "micronutrients. Portion every item in grams only. JSON only."
+        )
+        if meal_correction and meal_correction.strip():
+            user_text += (
+                f"\n\nUSER CORRECTION — treat this meal as: {meal_correction.strip()}. "
+                "Ignore any misidentification. Set meal_summary to match the corrected dish."
+            )
 
         request_kwargs: dict[str, Any] = {
             "model": self.settings.vision_model,
@@ -82,13 +93,7 @@ class VisionEstimator:
                 {
                     "role": "user",
                     "content": [
-                        {
-                            "type": "text",
-                            "text": (
-                                "Estimate this North Indian vegetarian meal with macros and "
-                                "micronutrients. Portion every item in grams only. JSON only."
-                            ),
-                        },
+                        {"type": "text", "text": user_text},
                         {
                             "type": "image_url",
                             "image_url": {"url": data_url},

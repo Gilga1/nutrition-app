@@ -8,7 +8,15 @@ from openai import OpenAI
 
 from .config import Settings
 from .food_db import Per100g, lookup_per_100g
-from .schemas import FoodItem, FoodLookupRequest, FoodLookupResponse
+from .schemas import (
+    FoodItem,
+    FoodLookupRequest,
+    FoodLookupResponse,
+    MacroTotals,
+    MealDecomposeRequest,
+    MealDecomposeResponse,
+    MealType,
+)
 
 
 def _round(v: float, d: int = 1) -> float:
@@ -161,6 +169,60 @@ class FoodLookupService:
         raise RuntimeError(
             "Food not in local database and vision API unavailable for lookup."
         )
+
+    def decompose_meal(self, req: MealDecomposeRequest) -> MealDecomposeResponse:
+        if not self._llm:
+            raise RuntimeError("Vision API not configured for meal decomposition.")
+
+        meal_type = req.meal_type or "Lunch"
+        prompt = (
+            "Break this North Indian vegetarian meal into components with realistic gram weights.\n"
+            "Return JSON only:\n"
+            '{"meal_summary": "string", "items": [{"item": "string", "grams": number}]}\n'
+            f"Meal: {req.meal_description.strip()}\n"
+            f"Meal type: {meal_type}\n"
+            "Use typical home portions in grams. Split combined dishes (e.g. boondi raita → boondi + curd)."
+        )
+        kwargs: dict[str, Any] = {
+            "model": self.settings.vision_model,
+            "temperature": 0.2,
+            "max_tokens": 1024,
+            "messages": [{"role": "user", "content": prompt}],
+        }
+        if self.settings.is_nemotron:
+            kwargs["extra_body"] = {
+                "chat_template_kwargs": {"enable_thinking": False},
+            }
+        else:
+            kwargs["response_format"] = {"type": "json_object"}
+
+        resp = self._llm.chat.completions.create(**kwargs)
+        content = resp.choices[0].message.content or "{}"
+        data = json.loads(content)
+        raw_items = data.get("items") or []
+        items: list[FoodItem] = []
+        for raw in raw_items:
+            name = str(raw.get("item", "")).strip()
+            grams = float(raw.get("grams") or 0)
+            if not name or grams <= 0:
+                continue
+            looked = self.lookup(FoodLookupRequest(item=name, grams=grams))
+            items.append(looked.item)
+
+        if not items:
+            raise ValueError("Could not decompose meal into food items.")
+
+        protein_g = round(sum(i.protein_g for i in items), 1)
+        carbs_g = round(sum(i.carbs_g for i in items), 1)
+        fat_g = round(sum(i.fat_g for i in items), 1)
+        totals = MacroTotals(
+            calories=calories_from_macros(protein_g, carbs_g, fat_g),
+            protein_g=protein_g,
+            carbs_g=carbs_g,
+            fat_g=fat_g,
+        )
+        summary = str(data.get("meal_summary") or req.meal_description).strip()
+        return MealDecomposeResponse(meal_summary=summary, items=items, totals=totals)
 
     def _llm_per_100g(self, item_name: str) -> Per100g:
         assert self._llm is not None
