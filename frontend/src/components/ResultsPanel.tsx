@@ -91,7 +91,6 @@ export function ResultsPanel({
 
   const tip = estimate.smart_reduction_tip
   const targets = estimate.daily_targets
-  const summaryChanged = mealSummary.trim() !== estimate.meal_summary.trim()
 
   function updateItem(id: string, patch: Partial<EditableItem>) {
     setItems((prev) =>
@@ -226,26 +225,37 @@ export function ResultsPanel({
             className="mt-1.5 w-full resize-none rounded-xl border border-ink/10 bg-white px-3 py-2 text-sm leading-snug text-ink focus:border-leaf/40 focus:outline-none"
             placeholder="e.g. Boondi raita with curd"
           />
-          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="mt-2 grid grid-cols-2 gap-2">
             <button
               type="button"
               onClick={() => void handleReanalyze()}
               disabled={reanalyzing || !mealSummary.trim()}
-              className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-ink px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-ink px-3 py-2.5 text-sm font-medium text-white disabled:opacity-50"
             >
               {reanalyzing ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (
                 <RefreshCw className="size-4" />
               )}
-              {summaryChanged ? 'Re-analyze with correction' : 'Re-analyze meal'}
+              Refetch
             </button>
-            <p className="text-xs text-ink-soft/60">
-              {sourceFile
-                ? 'Uses your photo + corrected name'
-                : 'Breaks dish into components from name'}
-            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setMealSummary('')
+                setReanalyzeError(null)
+              }}
+              disabled={reanalyzing || !mealSummary}
+              className="inline-flex items-center justify-center rounded-xl border border-ink/15 bg-white px-3 py-2.5 text-sm font-medium text-ink-soft hover:bg-mist/50 disabled:opacity-50"
+            >
+              Clear
+            </button>
           </div>
+          <p className="mt-2 text-xs text-ink-soft/60">
+            {sourceFile
+              ? 'Refetch uses your photo + the name above'
+              : 'Refetch builds components from the name above'}
+          </p>
           {reanalyzeError && <p className="mt-2 text-sm text-danger">{reanalyzeError}</p>}
         </div>
 
@@ -416,38 +426,45 @@ export function ResultsPanel({
       </section>
 
       {notionReady && items.length > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-ink/10 bg-card/95 px-3 py-3 backdrop-blur-md sm:static sm:border-0 sm:bg-transparent sm:p-0">
-          <div className="mx-auto flex max-w-lg flex-col gap-2 sm:max-w-2xl sm:flex-row sm:items-center">
-            <button
-              type="button"
-              onClick={() => void handleSaveNotion()}
-              disabled={saving || !!notionUrl}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-leaf px-5 py-3.5 text-sm font-semibold text-white transition hover:bg-leaf/90 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {saving ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" />
-                  Saving…
-                </>
-              ) : notionUrl ? (
-                'Saved to Notion'
-              ) : (
-                'Save to Notion'
-              )}
-            </button>
-            {notionUrl && (
-              <a
-                href={notionUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="text-center text-sm font-medium text-leaf underline-offset-2 hover:underline"
-              >
-                Open in Notion →
-              </a>
-            )}
-            {saveError && <p className="text-center text-sm text-danger sm:text-left">{saveError}</p>}
+        <>
+          <div className="h-[4.25rem] shrink-0 sm:hidden" aria-hidden />
+          <div className="fixed inset-x-0 bottom-0 z-20 sm:static">
+            <div className="border-t border-ink/10 bg-[#eef2ec]/95 px-3 py-2 shadow-[0_-6px_20px_-8px_rgba(26,46,36,0.2)] backdrop-blur-md sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:pb-0">
+              <div className="mx-auto flex max-w-lg flex-col gap-1.5 sm:max-w-2xl sm:flex-row sm:items-center sm:gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleSaveNotion()}
+                  disabled={saving || !!notionUrl}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-leaf px-4 py-3 text-sm font-semibold text-white transition hover:bg-leaf/90 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {saving ? (
+                    <>
+                      <Loader2 className="size-4 animate-spin" />
+                      Saving…
+                    </>
+                  ) : notionUrl ? (
+                    'Saved to Notion'
+                  ) : (
+                    'Save to Notion'
+                  )}
+                </button>
+                {notionUrl && (
+                  <a
+                    href={notionUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-center text-sm font-medium text-leaf underline-offset-2 hover:underline"
+                  >
+                    Open in Notion →
+                  </a>
+                )}
+                {saveError && (
+                  <p className="text-center text-sm text-danger sm:text-left">{saveError}</p>
+                )}
+              </div>
+            </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   )

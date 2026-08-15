@@ -150,7 +150,7 @@ export default function App() {
   }
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-lg flex-col px-3 pb-24 pt-4 sm:max-w-2xl sm:px-6 sm:pb-10 sm:pt-6">
+    <div className="mx-auto flex min-h-dvh max-w-lg flex-col px-3 pb-4 pt-4 sm:max-w-2xl sm:px-6 sm:pb-10 sm:pt-6">
       <header className="animate-fade-up mb-5 sm:mb-8">
         <div className="mb-1 flex items-start justify-between gap-3">
           <p className="font-display text-2xl font-bold tracking-tight text-ink sm:text-4xl">
@@ -323,7 +323,7 @@ export default function App() {
         )}
       </main>
 
-      <footer className="mt-10 text-center text-xs text-ink-soft/50">
+      <footer className={`mt-6 text-center text-xs text-ink-soft/50 ${estimate ? 'hidden sm:block sm:mt-10' : ''}`}>
         Estimates only · not medical advice
       </footer>
 
