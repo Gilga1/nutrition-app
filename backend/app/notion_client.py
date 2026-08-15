@@ -8,6 +8,7 @@ import httpx
 
 from .config import Settings
 from .schemas import MealEstimate, MealType
+from .food_lookup import calories_from_macros
 
 NOTION_VERSION = "2022-06-28"
 MEALS_DATA_SOURCE_ID = "28dcd7f7-f508-47b2-8026-d7f47757033b"
@@ -41,8 +42,9 @@ def _build_notes(estimate: MealEstimate) -> str:
     lines = [estimate.meal_summary, ""]
     for item in estimate.items:
         lines.append(
-            f"• {item.item} ({item.portion}): "
-            f"{round(item.calories)} kcal, {item.protein_g:.1f}g protein"
+            f"• {item.item} ({int(item.grams) if item.grams == int(item.grams) else item.grams} g): "
+            f"{round(calories_from_macros(item.protein_g, item.carbs_g, item.fat_g))} kcal, "
+            f"{item.protein_g:.1f}g protein"
         )
         if item.notes:
             lines.append(f"  {item.notes}")

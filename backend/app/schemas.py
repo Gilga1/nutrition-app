@@ -19,18 +19,34 @@ class UserProfile(BaseModel):
 
 class FoodItem(BaseModel):
     item: str = Field(..., description="Dish or food name")
+    grams: float = Field(..., ge=0, description="Portion weight in grams")
     portion: str = Field(
-        ...,
-        description="Estimated portion, e.g. '1.5 katori', '2 roti', '1 bowl'",
+        default="",
+        description="Display portion, always in grams e.g. '150 g'",
     )
     calories: float = Field(..., ge=0, description="Estimated calories for the portion")
     protein_g: float = Field(..., ge=0, description="Estimated protein in grams")
     carbs_g: float = Field(0, ge=0, description="Estimated carbs in grams")
     fat_g: float = Field(0, ge=0, description="Estimated fat in grams")
+    calories_per_100g: float = Field(0, ge=0)
+    protein_per_100g: float = Field(0, ge=0)
+    carbs_per_100g: float = Field(0, ge=0)
+    fat_per_100g: float = Field(0, ge=0)
+    source: str | None = Field(None, description="IFCT, USDA, AI estimate, etc.")
     notes: str | None = Field(
         None,
         description="Cooking medium or assumptions, e.g. 'cooked in ghee'",
     )
+
+
+class FoodLookupRequest(BaseModel):
+    item: str = Field(..., min_length=1)
+    grams: float = Field(..., gt=0)
+
+
+class FoodLookupResponse(BaseModel):
+    item: FoodItem
+    matched_name: str | None = None
 
 
 class MacroTotals(BaseModel):
@@ -55,7 +71,12 @@ class MicroTotals(BaseModel):
 
 class DailyTargets(BaseModel):
     calories: float | None = None
+    calories_min: float | None = None
+    calories_max: float | None = None
     protein_g: float | None = None
+    bmi: float | None = None
+    target_weight_min_kg: float | None = None
+    target_weight_max_kg: float | None = None
     note: str | None = None
 
 
@@ -90,3 +111,8 @@ class HealthResponse(BaseModel):
     model: str
     vision_configured: bool
     notion_configured: bool
+
+
+class NotionLogRequest(BaseModel):
+    meal_type: MealType
+    estimate: MealEstimate

@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { X } from 'lucide-react'
 import type { ActivityLevel, MedicalCondition, UserProfile } from '../api'
+import { getProfileInsights } from '../nutrition'
 
 const ACTIVITY_OPTIONS: { value: ActivityLevel; label: string }[] = [
   { value: 'sedentary', label: 'Sedentary' },
@@ -25,6 +26,7 @@ interface SettingsPanelProps {
 
 export function SettingsPanel({ profile, onSave, onClose }: SettingsPanelProps) {
   const [draft, setDraft] = useState<UserProfile>({ ...profile })
+  const insights = useMemo(() => getProfileInsights(draft), [draft])
 
   function toggleCondition(value: MedicalCondition) {
     setDraft((prev) => {
@@ -53,8 +55,43 @@ export function SettingsPanel({ profile, onSave, onClose }: SettingsPanelProps) 
           </button>
         </div>
         <p className="mb-5 text-sm text-ink-soft/75">
-          Used for daily calorie targets and condition-aware tips. Stored on this device only.
+          Used for BMI targets, daily calories, and condition-aware tips. Stored on this device only.
         </p>
+
+        {(insights.bmi != null || insights.calorieTarget != null) && (
+          <section className="mb-5 rounded-2xl border border-leaf/20 bg-leaf/5 p-4 text-sm">
+            {insights.bmi != null && (
+              <p className="text-ink">
+                <span className="font-medium">BMI:</span> {insights.bmi}{' '}
+                <span className="text-ink-soft">({insights.bmiLabel})</span>
+              </p>
+            )}
+            {insights.targetWeightMinKg != null && insights.targetWeightMaxKg != null && (
+              <p className="mt-2 text-ink-soft">
+                <span className="font-medium text-ink">Healthy weight range:</span>{' '}
+                {insights.targetWeightMinKg}–{insights.targetWeightMaxKg} kg
+                <span className="block text-xs text-ink-soft/70">
+                  Based on BMI 18.5–24.9 for your height
+                </span>
+              </p>
+            )}
+            {insights.calorieMin != null && insights.calorieMax != null && (
+              <p className="mt-2 text-ink-soft">
+                <span className="font-medium text-ink">Daily calories:</span>{' '}
+                {insights.calorieMin}–{insights.calorieMax} kcal
+                {insights.calorieTarget != null && (
+                  <span className="block text-xs text-ink-soft/70">
+                    ~{insights.calorieTarget} kcal at your current activity level
+                    {insights.proteinTargetG ? ` · ~${insights.proteinTargetG}g protein` : ''}
+                  </span>
+                )}
+              </p>
+            )}
+            {insights.conditionNote && (
+              <p className="mt-2 text-xs text-ink-soft/70">{insights.conditionNote}</p>
+            )}
+          </section>
+        )}
 
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="block text-sm">

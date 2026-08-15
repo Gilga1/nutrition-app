@@ -10,6 +10,7 @@ from openai import OpenAI
 from .config import Settings
 from .nutrition import estimate_tdee
 from .prompts import build_system_prompt
+from .food_lookup import normalize_food_item, calories_from_macros
 from .schemas import MealEstimate, MealType, UserProfile
 
 
@@ -27,17 +28,25 @@ def _extract_json(text: str) -> dict[str, Any]:
         return json.loads(match.group(0))
 
 
+def _normalize_items(payload: dict[str, Any]) -> dict[str, Any]:
+    items = payload.get("items") or []
+    payload["items"] = [normalize_food_item(i) for i in items]
+    return payload
+
+
 def _reconcile_totals(payload: dict[str, Any]) -> dict[str, Any]:
     items = payload.get("items") or []
     if not items:
         return payload
-    totals = {
-        "calories": round(sum(float(i.get("calories", 0)) for i in items), 1),
-        "protein_g": round(sum(float(i.get("protein_g", 0)) for i in items), 1),
-        "carbs_g": round(sum(float(i.get("carbs_g", 0)) for i in items), 1),
-        "fat_g": round(sum(float(i.get("fat_g", 0)) for i in items), 1),
+    protein_g = round(sum(float(i.get("protein_g", 0)) for i in items), 1)
+    carbs_g = round(sum(float(i.get("carbs_g", 0)) for i in items), 1)
+    fat_g = round(sum(float(i.get("fat_g", 0)) for i in items), 1)
+    payload["totals"] = {
+        "calories": calories_from_macros(protein_g, carbs_g, fat_g),
+        "protein_g": protein_g,
+        "carbs_g": carbs_g,
+        "fat_g": fat_g,
     }
-    payload["totals"] = totals
     return payload
 
 
@@ -77,7 +86,7 @@ class VisionEstimator:
                             "type": "text",
                             "text": (
                                 "Estimate this North Indian vegetarian meal with macros and "
-                                "micronutrients. Use katori/count portions. JSON only."
+                                "micronutrients. Portion every item in grams only. JSON only."
                             ),
                         },
                         {
@@ -106,7 +115,7 @@ class VisionEstimator:
         if not content.strip() and getattr(message, "reasoning_content", None):
             content = message.reasoning_content or "{}"
 
-        payload = _reconcile_totals(_extract_json(content))
+        payload = _reconcile_totals(_normalize_items(_extract_json(content)))
         estimate = MealEstimate.model_validate(payload)
         if profile:
             estimate.daily_targets = estimate_tdee(profile)

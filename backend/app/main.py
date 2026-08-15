@@ -12,7 +12,16 @@ from PIL import Image, UnidentifiedImageError
 
 from .config import get_settings
 from .notion_client import NotionMealLogger
-from .schemas import HealthResponse, MealEstimate, MealType, UserProfile
+from .food_lookup import FoodLookupService
+from .schemas import (
+    FoodLookupRequest,
+    FoodLookupResponse,
+    HealthResponse,
+    MealEstimate,
+    MealType,
+    NotionLogRequest,
+    UserProfile,
+)
 from .vision import VisionEstimator
 
 _ROOT = Path(__file__).resolve().parents[2]
@@ -29,6 +38,7 @@ async def lifespan(app: FastAPI):
     app.state.settings = settings
     app.state.estimator = None
     app.state.notion = None
+    app.state.food_lookup = FoodLookupService(settings)
     if settings.vision_configured:
         app.state.estimator = VisionEstimator(settings)
     if settings.notion_configured:
@@ -141,3 +151,27 @@ async def estimate_meal(
             ]
 
     return result
+
+
+@app.post("/api/notion/log")
+def log_meal_to_notion(body: NotionLogRequest) -> dict[str, str]:
+    notion: NotionMealLogger | None = app.state.notion
+    if notion is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Notion not configured. Set NOTION_API_KEY in .env.",
+        )
+    try:
+        url = notion.log_meal(body.estimate, meal_type=body.meal_type)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"Notion save failed: {exc}") from exc
+    return {"notion_page_url": url}
+
+
+@app.post("/api/food/lookup", response_model=FoodLookupResponse)
+def lookup_food(body: FoodLookupRequest) -> FoodLookupResponse:
+    service: FoodLookupService = app.state.food_lookup
+    try:
+        return service.lookup(body)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"Food lookup failed: {exc}") from exc

@@ -34,7 +34,6 @@ export default function App() {
   const [visionReady, setVisionReady] = useState(false)
   const [notionReady, setNotionReady] = useState(false)
   const [mealType, setMealType] = useState<MealType>('Lunch')
-  const [saveToNotion, setSaveToNotion] = useState(true)
   const [profile, setProfile] = useState<UserProfile>(() => loadProfile())
   const [showSettings, setShowSettings] = useState(false)
 
@@ -44,7 +43,6 @@ export default function App() {
         setBackendOk(true)
         setVisionReady(h.vision_configured)
         setNotionReady(h.notion_configured)
-        setSaveToNotion(h.notion_configured)
       })
       .catch(() => {
         setBackendOk(false)
@@ -78,7 +76,6 @@ export default function App() {
       const result = await estimateMeal(file, {
         mealType,
         profile,
-        saveToNotion: saveToNotion && notionReady,
       })
       setEstimate(result)
       setStatus('done')
@@ -156,8 +153,8 @@ export default function App() {
       <main className="flex flex-1 flex-col gap-5">
         <section className="animate-fade-up relative overflow-hidden rounded-3xl border border-ink/8 bg-card/80 shadow-[0_20px_50px_-28px_rgba(26,46,36,0.45)] backdrop-blur-sm">
           <div className="relative p-5 sm:p-6">
-            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end">
-              <label className="flex-1 text-sm">
+            <div className="mb-4">
+              <label className="block text-sm">
                 <span className="mb-1 block font-medium text-ink-soft">Meal type</span>
                 <select
                   value={mealType}
@@ -171,17 +168,6 @@ export default function App() {
                   ))}
                 </select>
               </label>
-              {notionReady && (
-                <label className="flex items-center gap-2 text-sm text-ink-soft">
-                  <input
-                    type="checkbox"
-                    checked={saveToNotion}
-                    onChange={(e) => setSaveToNotion(e.target.checked)}
-                    className="size-4 rounded border-ink/20"
-                  />
-                  Save to Notion
-                </label>
-              )}
             </div>
 
             {preview ? (
@@ -246,7 +232,7 @@ export default function App() {
 
             <p className="mt-3 flex items-center gap-1.5 text-xs text-ink-soft/60">
               <ImagePlus className="size-3.5" />
-              Profile stored on device · meals logged to your Notion Meals DB.
+              Profile stored on device · review & save meals to Notion after scanning.
             </p>
           </div>
         </section>
@@ -267,7 +253,9 @@ export default function App() {
           </div>
         )}
 
-        {estimate && <ResultsPanel estimate={estimate} />}
+        {estimate && (
+          <ResultsPanel estimate={estimate} mealType={mealType} notionReady={notionReady} />
+        )}
       </main>
 
       <footer className="mt-10 text-center text-xs text-ink-soft/50">
